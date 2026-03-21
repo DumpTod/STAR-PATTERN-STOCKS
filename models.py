@@ -243,48 +243,47 @@ class Database:
         cursor = conn.cursor()
         
         # Total trades
-        cursor.execute('SELECT COUNT(*) as total FROM trades')
-        result = cursor.fetchone()
-        total_trades = result['total'] if result else 0
+        cursor.execute('SELECT COUNT(*) FROM trades')
+        total_trades = cursor.fetchone()[0]
         
         # Active trades
-        cursor.execute('SELECT COUNT(*) as active FROM trades WHERE status = "active"')
-        result = cursor.fetchone()
-        active_trades = result['active'] if result else 0
+        cursor.execute('SELECT COUNT(*) FROM trades WHERE status = ?', ('active',))
+        active_trades = cursor.fetchone()[0]
         
-        # Closed trades stats
-        cursor.execute('''
-            SELECT 
-                COUNT(*) as closed_trades,
-                COALESCE(SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END), 0) as winners,
-                COALESCE(SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END), 0) as losers,
-                COALESCE(AVG(pnl_percent), 0) as avg_return,
-                COALESCE(SUM(pnl), 0) as total_pnl
-            FROM trades WHERE status = 'closed'
-        ''')
-        result = cursor.fetchone()
-        closed_stats = dict(result) if result else {
-            'closed_trades': 0,
-            'winners': 0,
-            'losers': 0,
-            'avg_return': 0,
-            'total_pnl': 0
-        }
+        # Closed trades count
+        cursor.execute('SELECT COUNT(*) FROM trades WHERE status = ?', ('closed',))
+        closed_trades = cursor.fetchone()[0]
+        
+        # Winners count
+        cursor.execute('SELECT COUNT(*) FROM trades WHERE status = ? AND pnl > 0', ('closed',))
+        winners = cursor.fetchone()[0]
+        
+        # Losers count
+        cursor.execute('SELECT COUNT(*) FROM trades WHERE status = ? AND pnl < 0', ('closed',))
+        losers = cursor.fetchone()[0]
+        
+        # Average return
+        cursor.execute('SELECT AVG(pnl_percent) FROM trades WHERE status = ?', ('closed',))
+        avg_result = cursor.fetchone()[0]
+        avg_return = avg_result if avg_result else 0
+        
+        # Total P&L
+        cursor.execute('SELECT SUM(pnl) FROM trades WHERE status = ?', ('closed',))
+        pnl_result = cursor.fetchone()[0]
+        total_pnl = pnl_result if pnl_result else 0
         
         conn.close()
         
-        # Calculate win rate safely
-        closed_count = closed_stats.get('closed_trades', 0)
-        winners = closed_stats.get('winners', 0)
-        win_rate = (winners / closed_count * 100) if closed_count > 0 else 0
+        # Calculate win rate
+        win_rate = (winners / closed_trades * 100) if closed_trades > 0 else 0
         
         return {
             'total_trades': total_trades,
             'active_trades': active_trades,
-            'closed_trades': closed_count,
+            'closed_trades': closed_trades,
             'winners': winners,
-            'losers': closed_stats.get('losers', 0),
+            'losers': losers,
             'win_rate': win_rate,
-            'avg_return': closed_stats.get('avg_return', 0),
-            'total_pnl': closed_stats.get('total_pnl', 0)
+            'avg_return': avg_return,
+            'total_pnl': total_pnl
         }
