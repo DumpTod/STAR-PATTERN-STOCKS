@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Trade History - Star Pattern Stocks{% endblock %}
+
+{% block content %}
+<!-- Overall Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>Total Trades</h3>
+        <div class="value">{{ stats.total_trades }}</div>
+    </div>
+    
+    <div class="stat-card green">
+        <h3>Winners</h3>
+        <div class="value">{{ stats.winners }}</div>
+    </div>
+    
+    <div class="stat-card red">
+        <h3>Losers</h3>
+        <div class="value">{{ stats.losers }}</div>
+    </div>
+    
+    <div class="stat-card {% if stats.win_rate >= 50 %}green{% else %}red{% endif %}">
+        <h3>Win Rate</h3>
+        <div class="value">{{ "{:.1f}".format(stats.win_rate) }}%</div>
+    </div>
+    
+    <div class="stat-card {% if stats.avg_return > 0 %}green{% else %}red{% endif %}">
+        <h3>Avg Return</h3>
+        <div class="value">{{ "{:.1f}".format(stats.avg_return) }}%</div>
+    </div>
+    
+    <div class="stat-card {% if stats.total_pnl > 0 %}green{% else %}red{% endif %}">
+        <h3>Total P&L</h3>
+        <div class="value">₹{{ "{:,.0f}".format(stats.total_pnl) }}</div>
+    </div>
+</div>
+
+<!-- Trade History Table -->
+<div class="card">
+    <h2>📜 All Trades ({{ trades|length }})</h2>
+    
+    {% if trades %}
+        <!-- Filter Controls -->
+        <div style="margin-bottom: 20px;">
+            <select id="statusFilter" onchange="filterTrades()" class="btn btn-primary btn-sm">
+                <option value="all">All Trades</option>
+                <option value="active">Active Only</option>
+                <option value="closed">Closed Only</option>
+            </select>
+            
+            <select id="resultFilter" onchange="filterTrades()" class="btn btn-primary btn-sm">
+                <option value="all">All Results</option>
+                <option value="profit">Profitable Only</option>
+                <option value="loss">Losses Only</option>
+            </select>
+        </div>
+        
+        <div style="overflow-x: auto;">
+            <table id="tradesTable">
+                <thead>
+                    <tr>
+                        <th>Stock</th>
+                        <th>Entry Date</th>
+                        <th>Entry Price</th>
+                        <th>Quantity</th>
+                        <th>Exit Date</th>
+                        <th>Exit Price</th>
+                        <th>Exit Reason</th>
+                        <th>P&L</th>
+                        <th>Return %</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for trade in trades %}
+                    <tr data-status="{{ trade.status }}" data-pnl="{{ trade.pnl or 0 }}">
+                        <td><strong>{{ trade.stock_symbol }}</strong></td>
+                        <td>{{ trade.entry_date }}</td>
+                        <td>₹{{ "{:.2f}".format(trade.entry_price) }}</td>
+                        <td>{{ trade.quantity }}</td>
+                        <td>
+                            {% if trade.exit_date %}
+                                {{ trade.exit_date }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if trade.exit_price %}
+                                ₹{{ "{:.2f}".format(trade.exit_price) }}
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if trade.exit_reason %}
+                                <span class="badge warning">{{ trade.exit_reason.replace('_', ' ').title() }}</span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if trade.pnl %}
+                                <span class="{% if trade.pnl > 0 %}positive{% else %}negative{% endif %}">
+                                    ₹{{ "{:,.2f}".format(trade.pnl) }}
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if trade.pnl_percent %}
+                                <span class="{% if trade.pnl_percent > 0 %}positive{% else %}negative{% endif %}">
+                                    {{ "{:.2f}".format(trade.pnl_percent) }}%
+                                </span>
+                            {% else %}
+                                -
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if trade.status == 'active' %}
+                                <span class="badge info">Active</span>
+                            {% elif trade.pnl and trade.pnl > 0 %}
+                                <span class="badge success">Profit</span>
+                            {% else %}
+                                <span class="badge danger">Loss</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p>No trades yet. Start trading to see your history!</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Performance Analysis -->
+{% if stats.closed_trades > 0 %}
+<div class="grid-2">
+    <div class="card">
+        <h2>📊 Performance Breakdown</h2>
+        <div style="padding: 20px;">
+            <div style="margin-bottom: 15px;">
+                <strong>Win Rate:</strong> 
+                <span class="{% if stats.win_rate >= 50 %}positive{% else %}negative{% endif %}">
+                    {{ "{:.1f}".format(stats.win_rate) }}%
+                </span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Average Return:</strong> 
+                <span class="{% if stats.avg_return > 0 %}positive{% else %}negative{% endif %}">
+                    {{ "{:.2f}".format(stats.avg_return) }}%
+                </span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Total P&L:</strong> 
+                <span class="{% if stats.total_pnl > 0 %}positive{% else %}negative{% endif %}">
+                    ₹{{ "{:,.2f}".format(stats.total_pnl) }}
+                </span>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Winning Trades:</strong> {{ stats.winners }}
+            </div>
+            <div style="margin-bottom: 15px;">
+                <strong>Losing Trades:</strong> {{ stats.losers }}
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <h2>💡 Key Insights</h2>
+        <div style="padding: 20px;">
+            {% if stats.win_rate >= 58 %}
+                <div class="alert success">
+                    ✅ Win rate is above target (58%+). Strategy is performing well!
+                </div>
+            {% elif stats.win_rate >= 50 %}
+                <div class="alert info">
+                    📊 Win rate is decent (50-58%). Keep monitoring performance.
+                </div>
+            {% else %}
+                <div class="alert error">
+                    ⚠️ Win rate below 50%. Review trade entries and exits carefully.
+                </div>
+            {% endif %}
+            
+            {% if stats.avg_return > 15 %}
+                <div class="alert success">
+                    🎯 Average return exceeds target (15%+). Excellent performance!
+                </div>
+            {% elif stats.avg_return > 5 %}
+                <div class="alert info">
+                    📈 Positive average return. Strategy is profitable.
+                </div>
+            {% else %}
+                <div class="alert error">
+                    ⚠️ Low average return. Consider tighter stop losses or better entries.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+function filterTrades() {
+    const statusFilter = document.getElementById('statusFilter').value;
+    const resultFilter = document.getElementById('resultFilter').value;
+    const rows = document.querySelectorAll('#tradesTable tbody tr');
+    
+    rows.forEach(row => {
+        let showRow = true;
+        
+        // Status filter
+        if (statusFilter !== 'all') {
+            const status = row.dataset.status;
+            if (status !== statusFilter) {
+                showRow = false;
+            }
+        }
+        
+        // Result filter (profit/loss)
+        if (resultFilter !== 'all' && showRow) {
+            const pnl = parseFloat(row.dataset.pnl);
+            if (resultFilter === 'profit' && pnl <= 0) {
+                showRow = false;
+            } else if (resultFilter === 'loss' && pnl >= 0) {
+                showRow = false;
+            }
+        }
+        
+        row.style.display = showRow ? '' : 'none';
+    });
+}
+
+// Export to CSV
+function exportToCSV() {
+    const table = document.getElementById('tradesTable');
+    const rows = table.querySelectorAll('tr');
+    let csv = [];
+    
+    rows.forEach(row => {
+        const cols = row.querySelectorAll('td, th');
+        const rowData = Array.from(cols).map(col => col.textContent.trim());
+        csv.push(rowData.join(','));
+    });
+    
+    const csvContent = csv.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'trade_history.csv';
+    a.click();
+}
+</script>
+{% endblock %}

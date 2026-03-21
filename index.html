@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Star Pattern Stocks{% endblock %}
+
+{% block content %}
+<!-- Scanner Status -->
+<div class="scanner-status">
+    {% if latest_scan %}
+        <div class="status-indicator"></div>
+        <div>
+            <strong>Scanner Active</strong> - Last scan: {{ latest_scan.scan_date }} at {{ latest_scan.created_at.split()[1][:5] }} | 
+            Scanned {{ latest_scan.stocks_scanned }} stocks | Found {{ latest_scan.signals_found }} signals
+        </div>
+    {% else %}
+        <div class="status-indicator inactive"></div>
+        <div>
+            <strong>No scans yet</strong> - Click "Run Scanner" to start
+        </div>
+    {% endif %}
+</div>
+
+<!-- Portfolio Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <h3>Current Capital</h3>
+        <div class="value">₹{{ "{:,.0f}".format(portfolio.ending_capital) }}</div>
+    </div>
+    
+    <div class="stat-card {% if portfolio.ending_capital >= portfolio.starting_capital %}green{% else %}red{% endif %}">
+        <h3>Total P&L</h3>
+        <div class="value">₹{{ "{:,.0f}".format(portfolio.ending_capital - 500000) }}</div>
+    </div>
+    
+    <div class="stat-card blue">
+        <h3>Active Trades</h3>
+        <div class="value">{{ stats.active_trades }}</div>
+    </div>
+    
+    <div class="stat-card green">
+        <h3>Win Rate</h3>
+        <div class="value">{{ "{:.1f}".format(stats.win_rate) }}%</div>
+    </div>
+    
+    <div class="stat-card">
+        <h3>Total Trades</h3>
+        <div class="value">{{ stats.total_trades }}</div>
+    </div>
+    
+    <div class="stat-card {% if stats.avg_return > 0 %}green{% else %}red{% endif %}">
+        <h3>Avg Return</h3>
+        <div class="value">{{ "{:.1f}".format(stats.avg_return) }}%</div>
+    </div>
+</div>
+
+<!-- Action Buttons -->
+<div class="card">
+    <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+        <button class="btn btn-primary" onclick="runScanner()">
+            🔍 Run Scanner Now
+        </button>
+        <button class="btn btn-success" onclick="checkExits()">
+            ✅ Check Exits
+        </button>
+    </div>
+    
+    <div id="scanLoading" class="loading">
+        <div class="spinner"></div>
+        <p>Scanning stocks... This may take a few minutes.</p>
+    </div>
+    
+    <div id="scanResult"></div>
+</div>
+
+<!-- Pending Signals -->
+<div class="card">
+    <h2>📊 Pending Signals ({{ pending_signals|length }})</h2>
+    
+    {% if pending_signals %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Stock</th>
+                    <th>Signal Date</th>
+                    <th>Entry Price</th>
+                    <th>Stop Loss</th>
+                    <th>Risk %</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for signal in pending_signals %}
+                <tr>
+                    <td><strong>{{ signal.stock_symbol }}</strong></td>
+                    <td>{{ signal.signal_date }}</td>
+                    <td>₹{{ "{:.2f}".format(signal.entry_price) }}</td>
+                    <td>₹{{ "{:.2f}".format(signal.sl_price) }}</td>
+                    <td class="negative">{{ "{:.1f}".format(((signal.entry_price - signal.sl_price) / signal.entry_price * 100)) }}%</td>
+                    <td>
+                        <button class="btn btn-success btn-sm" onclick="enterTrade({{ signal.id }})">
+                            Enter Trade
+                        </button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="empty-state">
+            <p>No pending signals. Run the scanner to find new opportunities!</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Active Trades -->
+<div class="card">
+    <h2>📈 Active Trades ({{ active_trades|length }})</h2>
+    
+    {% if active_trades %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Stock</th>
+                    <th>Entry Date</th>
+                    <th>Entry Price</th>
+                    <th>Quantity</th>
+                    <th>Position Value</th>
+                    <th>Stop Loss</th>
+                    <th>Current Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for trade in active_trades %}
+                <tr>
+                    <td><strong>{{ trade.stock_symbol }}</strong></td>
+                    <td>{{ trade.entry_date }}</td>
+                    <td>₹{{ "{:.2f}".format(trade.entry_price) }}</td>
+                    <td>{{ trade.quantity }}</td>
+                    <td>₹{{ "{:,.2f}".format(trade.position_value) }}</td>
+                    <td class="negative">₹{{ "{:.2f}".format(trade.sl_price) }}</td>
+                    <td><span class="badge info">Active</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <div class="empty-state">
+            <p>No active trades. Enter a trade from pending signals above.</p>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+async function runScanner() {
+    const loading = document.getElementById('scanLoading');
+    const result = document.getElementById('scanResult');
+    
+    loading.classList.add('active');
+    result.innerHTML = '';
+    
+    try {
+        const data = await apiCall('/api/run-scanner');
+        
+        loading.classList.remove('active');
+        
+        if (data.success) {
+            result.innerHTML = `
+                <div class="alert success">
+                    ✅ Scan completed successfully!<br>
+                    Scanned: ${data.stocks_scanned} stocks<br>
+                    Signals found: ${data.signals_found}<br>
+                    Duration: ${data.scan_duration.toFixed(2)}s
+                </div>
+            `;
+            
+            // Reload page after 2 seconds to show new signals
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            result.innerHTML = `
+                <div class="alert error">
+                    ❌ Scan failed: ${data.error}
+                </div>
+            `;
+        }
+    } catch (error) {
+        loading.classList.remove('active');
+        result.innerHTML = `
+            <div class="alert error">
+                ❌ Error: ${error.message}
+            </div>
+        `;
+    }
+}
+
+async function checkExits() {
+    try {
+        const data = await apiCall('/api/check-exits');
+        
+        if (data.success) {
+            showAlert('✅ Exit check completed. Refreshing...', 'success');
+            setTimeout(() => location.reload(), 1500);
+        }
+    } catch (error) {
+        showAlert('❌ Error checking exits: ' + error.message, 'error');
+    }
+}
+
+async function enterTrade(signalId) {
+    if (!confirm('Are you sure you want to enter this trade?')) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall('/api/enter-trade', 'POST', {
+            signal_id: signalId
+        });
+        
+        if (data.success) {
+            showAlert(`✅ Trade entered! Quantity: ${data.quantity}, Value: ₹${data.position_value.toFixed(2)}`, 'success');
+            setTimeout(() => location.reload(), 1500);
+        }
+    } catch (error) {
+        showAlert('❌ Error entering trade: ' + error.message, 'error');
+    }
+}
+
+// Auto-refresh stats every 5 minutes
+setInterval(async () => {
+    try {
+        const data = await apiCall('/api/stats', 'GET');
+        console.log('Stats updated:', data);
+    } catch (error) {
+        console.error('Error refreshing stats:', error);
+    }
+}, 300000);
+</script>
+{% endblock %}

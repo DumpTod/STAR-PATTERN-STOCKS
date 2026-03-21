@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: star-pattern-stocks
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: FYERS_CLIENT_ID
+        sync: false
+      - key: FYERS_SECRET_KEY
+        sync: false
+      - key: FYERS_REDIRECT_URI
+        value: https://trade.fyers.in/api-login/redirect-uri/index.html
+      - key: FYERS_PIN
+        sync: false
+      - key: STARTING_CAPITAL
+        value: 500000
+      - key: TRAILING_SL_PERCENT
+        value: 3.0
+      - key: FLASK_SECRET_KEY
+        generateValue: true
